@@ -5,45 +5,108 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useRouter } from 'next/navigation';
 import type { User } from '@/types/user'; // Assuming User type exists
 
+interface SignupCredentials {
+    name: string;
+    email: string;
+    password?: string; // Optional for update, required for signup
+    domaine?: string; // Required for student signup
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (userData: User, token: string) => Promise<void>;
+  signup: (credentials: SignupCredentials) => Promise<void>; // Add signup method
   logout: () => void;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Temporary storage for mock users, including dynamically added ones
+let mockUserStorage: User[] = [
+     { id: '1', name: 'Admin User', email: 'admin@example.com', role: 'admin' },
+     { id: '2', name: 'Student User', email: 'student@example.com', role: 'doctorant', domaine: 'Initial Domain' }, // Example initial student
+     // Add initial students from admin/students mock data if needed
+     { id: '2', name: 'Alice Smith', email: 'alice@example.com', role: 'doctorant', domaine: 'Computer Science' },
+     { id: '3', name: 'Bob Johnson', email: 'bob@example.com', role: 'doctorant', domaine: 'Physics' },
+     { id: '4', name: 'Charlie Brown', email: 'charlie@example.com', role: 'doctorant', domaine: 'Mathematics' },
+];
+// Add mock passwords (in real app, this is handled securely by backend)
+const mockPasswords: { [email: string]: string } = {
+    'admin@example.com': 'password',
+    'student@example.com': 'password',
+    'alice@example.com': 'password', // Assuming default password for mocked students
+    'bob@example.com': 'password',
+    'charlie@example.com': 'password',
+};
+
+
 // Mock API functions - replace with actual API calls
 async function mockLoginApi(credentials: { email: string; password?: string }): Promise<{ user: User; token: string }> {
-  // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 500));
 
-  // In a real app, you'd send credentials to your backend (e.g., Laravel)
-  // The backend would verify credentials and return user data and a token
-  if (credentials.email === 'admin@example.com' && credentials.password === 'password') {
+  const user = mockUserStorage.find(u => u.email === credentials.email);
+  const storedPassword = mockPasswords[credentials.email];
+
+  if (user && credentials.password && storedPassword === credentials.password) {
+    // Return the found user and a fake token
     return {
-      user: { id: '1', name: 'Admin User', email: 'admin@example.com', role: 'admin' },
-      token: 'fake-admin-token',
-    };
-  } else if (credentials.email === 'student@example.com' && credentials.password === 'password') {
-     return {
-      user: { id: '2', name: 'Student User', email: 'student@example.com', role: 'doctorant' },
-      token: 'fake-student-token',
+      user: user,
+      token: `fake-${user.role}-token-${user.id}`, // Generate a unique fake token
     };
   } else {
     throw new Error('Invalid credentials');
   }
 }
 
+async function mockSignupApi(credentials: SignupCredentials): Promise<{ user: User; token: string }> {
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    // Check if email already exists
+    if (mockUserStorage.some(u => u.email === credentials.email)) {
+        throw new Error('Email already in use.');
+    }
+    if (!credentials.password) {
+        throw new Error('Password is required for signup.');
+    }
+
+    // Create new user (assuming 'doctorant' role for self-signup)
+    const newUser: User = {
+        id: `user-${Math.random().toString(36).substring(2, 9)}`, // Generate unique ID
+        name: credentials.name,
+        email: credentials.email,
+        role: 'doctorant',
+        domaine: credentials.domaine || 'Not Specified', // Default if not provided
+    };
+
+    // Add user to mock storage
+    mockUserStorage.push(newUser);
+    mockPasswords[newUser.email] = credentials.password; // Store mock password
+
+    console.log('Mock User Storage Updated:', mockUserStorage);
+    console.log('Mock Passwords Updated:', mockPasswords);
+
+
+    // Return new user and a fake token
+     return {
+        user: newUser,
+        token: `fake-doctorant-token-${newUser.id}`, // Generate a unique fake token
+    };
+}
+
+
 async function mockVerifyTokenApi(token: string): Promise<User | null> {
   await new Promise(resolve => setTimeout(resolve, 300));
-  if (token === 'fake-admin-token') {
-    return { id: '1', name: 'Admin User', email: 'admin@example.com', role: 'admin' };
-  } else if (token === 'fake-student-token') {
-     return { id: '2', name: 'Student User', email: 'student@example.com', role: 'doctorant' };
-  }
+   // Check against dynamically generated tokens or hardcoded ones
+    const tokenParts = token.split('-'); // e.g., ['fake', 'admin', 'token', '1'] or ['fake', 'doctorant', 'token', 'user-xyz']
+    if (tokenParts.length >= 4 && tokenParts[0] === 'fake' && tokenParts[2] === 'token') {
+        const userId = tokenParts.slice(3).join('-'); // Handle IDs potentially containing '-'
+        const user = mockUserStorage.find(u => u.id === userId);
+        if (user && user.role === tokenParts[1]) { // Check role match too
+            return user;
+        }
+    }
   return null;
 }
 
@@ -64,19 +127,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (userData) {
           setUser(userData);
           setToken(storedToken);
-          // Redirect based on role if not already on the correct dashboard
-          const currentPath = window.location.pathname;
-          if (userData.role === 'admin' && !currentPath.startsWith('/admin')) {
-            router.push('/admin/dashboard');
-          } else if (userData.role === 'doctorant' && !currentPath.startsWith('/student')) {
-            router.push('/student/dashboard');
-          }
+          // Redirect based on role only if on root or login/signup page initially
+           const currentPath = window.location.pathname;
+           if (currentPath === '/' || currentPath === '/login' || currentPath === '/signup') {
+               if (userData.role === 'admin') {
+                   router.replace('/admin/dashboard');
+               } else if (userData.role === 'doctorant') {
+                   router.replace('/student/dashboard');
+               }
+           }
         } else {
-          logout(); // Invalid token
+            // Don't auto-logout if token is invalid, let login/signup proceed
+            // logout();
+            localStorage.removeItem('authToken'); // Clear invalid token
         }
       } catch (error) {
         console.error('Token verification failed:', error);
-        logout();
+         localStorage.removeItem('authToken'); // Clear potentially problematic token
+        // logout();
       }
     }
     setIsLoading(false);
@@ -101,6 +169,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [router]);
 
+  const signup = useCallback(async (credentials: SignupCredentials) => {
+    // Call the mock signup API
+    const { user: newUser, token: newToken } = await mockSignupApi(credentials);
+    // Note: We don't automatically log the user in after signup in this flow.
+    // They will be redirected to the login page.
+     console.log("Signup successful for:", newUser);
+     // No need to set user/token state here as they need to login separately
+  }, []);
+
 
   const logout = useCallback(() => {
     setUser(null);
@@ -109,13 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     router.push('/login');
   }, [router]);
 
-  const value = { user, token, login, logout, isLoading };
-
-  // Show loading state or children based on isLoading
-  // Or simply return children if initial loading state handling is done elsewhere
-  // if (isLoading) {
-  //   return <div>Loading authentication...</div>; // Or a proper loading spinner
-  // }
+  const value = { user, token, login, signup, logout, isLoading };
 
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -19,6 +19,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
+import Link from 'next/link'; // Import Link
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -34,6 +35,7 @@ async function mockLoginApi(credentials: LoginFormValues): Promise<{ user: any; 
 
   // In a real app, you'd send credentials to your backend (e.g., Laravel)
   // The backend would verify credentials and return user data and a token
+  // Check against mock data from AuthContext or a shared mock store if available
   if (credentials.email === 'admin@example.com' && credentials.password === 'password') {
     return {
       user: { id: '1', name: 'Admin User', email: 'admin@example.com', role: 'admin' },
@@ -41,10 +43,29 @@ async function mockLoginApi(credentials: LoginFormValues): Promise<{ user: any; 
     };
   } else if (credentials.email === 'student@example.com' && credentials.password === 'password') {
      return {
-      user: { id: '2', name: 'Student User', email: 'student@example.com', role: 'doctorant' },
+      user: { id: '2', name: 'Student User', email: 'student@example.com', role: 'doctorant', domaine: 'Computer Science' }, // Added domaine
       token: 'fake-student-token',
     };
-  } else {
+  } else if (credentials.email === 'alice@example.com' && credentials.password === 'password') { // Added Alice from mock data
+     return {
+         user: { id: '2', name: 'Alice Smith', email: 'alice@example.com', role: 'doctorant', domaine: 'Computer Science' },
+         token: 'fake-alice-token',
+     };
+  } else if (credentials.email === 'bob@example.com' && credentials.password === 'password') { // Added Bob
+      return {
+          user: { id: '3', name: 'Bob Johnson', email: 'bob@example.com', role: 'doctorant', domaine: 'Physics' },
+          token: 'fake-bob-token',
+      };
+  } else if (credentials.email === 'charlie@example.com' && credentials.password === 'password') { // Added Charlie
+      return {
+          user: { id: '4', name: 'Charlie Brown', email: 'charlie@example.com', role: 'doctorant', domaine: 'Mathematics' },
+          token: 'fake-charlie-token',
+      };
+  }
+  // Add check for dynamically added users if mockSignupApi updates a shared store
+  // For now, only hardcoded users work for login
+
+  else {
     throw new Error('Invalid credentials');
   }
 }
@@ -157,6 +178,13 @@ export default function LoginPage() {
               </Button>
             </form>
           </Form>
+           {/* Link to Sign Up page */}
+           <div className="mt-4 text-center text-sm">
+            Don't have an account?{' '}
+             <Link href="/signup" className="underline text-primary hover:text-primary/80">
+                Sign Up
+            </Link>
+           </div>
            {/* Optionally add a link for password recovery if needed later */}
           {/* <div className="mt-4 text-center text-sm">
             <a href="#" className="underline text-primary hover:text-primary/80">
