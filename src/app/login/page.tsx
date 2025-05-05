@@ -28,47 +28,7 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-// Mock API function - replace with actual API call from AuthContext or service
-async function mockLoginApi(credentials: LoginFormValues): Promise<{ user: any; token: string }> {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  // In a real app, you'd send credentials to your backend (e.g., Laravel)
-  // The backend would verify credentials and return user data and a token
-  // Check against mock data from AuthContext or a shared mock store if available
-  if (credentials.email === 'admin@example.com' && credentials.password === 'password') {
-    return {
-      user: { id: '1', name: 'Admin User', email: 'admin@example.com', role: 'admin' },
-      token: 'fake-admin-token',
-    };
-  } else if (credentials.email === 'student@example.com' && credentials.password === 'password') {
-     return {
-      user: { id: '2', name: 'Student User', email: 'student@example.com', role: 'doctorant', domaine: 'Computer Science' }, // Added domaine
-      token: 'fake-student-token',
-    };
-  } else if (credentials.email === 'alice@example.com' && credentials.password === 'password') { // Added Alice from mock data
-     return {
-         user: { id: '2', name: 'Alice Smith', email: 'alice@example.com', role: 'doctorant', domaine: 'Computer Science' },
-         token: 'fake-alice-token',
-     };
-  } else if (credentials.email === 'bob@example.com' && credentials.password === 'password') { // Added Bob
-      return {
-          user: { id: '3', name: 'Bob Johnson', email: 'bob@example.com', role: 'doctorant', domaine: 'Physics' },
-          token: 'fake-bob-token',
-      };
-  } else if (credentials.email === 'charlie@example.com' && credentials.password === 'password') { // Added Charlie
-      return {
-          user: { id: '4', name: 'Charlie Brown', email: 'charlie@example.com', role: 'doctorant', domaine: 'Mathematics' },
-          token: 'fake-charlie-token',
-      };
-  }
-  // Add check for dynamically added users if mockSignupApi updates a shared store
-  // For now, only hardcoded users work for login
-
-  else {
-    throw new Error('Invalid credentials');
-  }
-}
+// Removed redundant mockLoginApi function. The login logic is handled within AuthContext.
 
 
 export default function LoginPage() {
@@ -100,15 +60,17 @@ export default function LoginPage() {
   const onSubmit = async (values: LoginFormValues) => {
      setIsSubmitting(true);
     try {
-      // Replace mockLoginApi with your actual API call mechanism
-      // Potentially call a function provided by useAuth context
-      const { user: userData, token } = await mockLoginApi(values);
-      await login(userData, token);
-      // Redirect is handled within AuthContext's login function
-       toast({
-         title: "Login Successful",
-         description: `Welcome back, ${userData.name}!`,
-       });
+      // Directly use the login function from the AuthContext
+      // The AuthContext's login function handles the API call (or mock call)
+      // and subsequent state updates and redirection.
+      await login({ email: values.email, password: values.password } as any, ''); // Pass credentials to context login
+                                                                                  // The second argument (token) is handled internally by the mock/real API call within context
+
+       // Success toast and redirection are handled within AuthContext's login function
+       // toast({
+       //   title: "Login Successful",
+       //   description: `Welcome back!`, // Name might not be immediately available here
+       // });
     } catch (error) {
       console.error('Login failed:', error);
       toast({

@@ -4,6 +4,7 @@ import type React from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User } from '@/types/user'; // Assuming User type exists
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 interface SignupCredentials {
     name: string;
@@ -12,10 +13,17 @@ interface SignupCredentials {
     domaine?: string; // Required for student signup
 }
 
+// Define credentials type for login
+interface LoginCredentials {
+  email: string;
+  password?: string;
+}
+
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (userData: User, token: string) => Promise<void>;
+  login: (credentials: LoginCredentials, token?: string) => Promise<void>; // Update signature
   signup: (credentials: SignupCredentials) => Promise<void>; // Add signup method
   logout: () => void;
   isLoading: boolean;
@@ -43,19 +51,27 @@ const mockPasswords: { [email: string]: string } = {
 
 
 // Mock API functions - replace with actual API calls
-async function mockLoginApi(credentials: { email: string; password?: string }): Promise<{ user: User; token: string }> {
+async function mockLoginApi(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
   await new Promise(resolve => setTimeout(resolve, 500));
 
   const user = mockUserStorage.find(u => u.email === credentials.email);
   const storedPassword = mockPasswords[credentials.email];
 
+   console.log("Attempting login for:", credentials.email);
+   console.log("Found user:", user);
+   console.log("Stored password:", storedPassword);
+   console.log("Provided password:", credentials.password);
+
+
   if (user && credentials.password && storedPassword === credentials.password) {
+     console.log("Login successful for:", user.email);
     // Return the found user and a fake token
     return {
       user: user,
       token: `fake-${user.role}-token-${user.id}`, // Generate a unique fake token
     };
   } else {
+      console.log("Login failed for:", credentials.email);
     throw new Error('Invalid credentials');
   }
 }
@@ -116,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { toast } = useToast(); // Get toast function
 
   const verifyToken = useCallback(async () => {
     setIsLoading(true);
@@ -138,7 +155,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
            }
         } else {
             // Don't auto-logout if token is invalid, let login/signup proceed
-            // logout();
+             // logout();
+             console.log("Token verification failed, removing invalid token.");
             localStorage.removeItem('authToken'); // Clear invalid token
         }
       } catch (error) {
@@ -157,17 +175,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []); // Run only once on mount
 
 
-  const login = useCallback(async (userData: User, newToken: string) => {
-    setUser(userData);
-    setToken(newToken);
-    localStorage.setItem('authToken', newToken);
-    // Redirect after login
-    if (userData.role === 'admin') {
-      router.push('/admin/dashboard');
-    } else if (userData.role === 'doctorant') {
-      router.push('/student/dashboard');
+  const login = useCallback(async (credentials: LoginCredentials) => {
+    try {
+        // Call the mock login API defined within this context
+        const { user: userData, token: newToken } = await mockLoginApi(credentials);
+
+        // Set state
+        setUser(userData);
+        setToken(newToken);
+        localStorage.setItem('authToken', newToken);
+
+        // Show success toast
+        toast({
+            title: "Login Successful",
+            description: `Welcome back, ${userData.name}!`,
+        });
+
+
+        // Redirect after successful login
+        if (userData.role === 'admin') {
+            router.push('/admin/dashboard');
+        } else if (userData.role === 'doctorant') {
+            router.push('/student/dashboard');
+        }
+    } catch (error) {
+        // If mockLoginApi throws, re-throw to be caught by the calling component
+        console.error("Error during login process in context:", error);
+        throw error; // Propagate the error
     }
-  }, [router]);
+  }, [router, toast]);
 
   const signup = useCallback(async (credentials: SignupCredentials) => {
     // Call the mock signup API
@@ -184,7 +220,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     localStorage.removeItem('authToken');
     router.push('/login');
-  }, [router]);
+     toast({ title: "Logged Out", description: "You have been successfully logged out."});
+  }, [router, toast]);
 
   const value = { user, token, login, signup, logout, isLoading };
 
